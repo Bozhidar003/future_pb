@@ -18,6 +18,7 @@ export default function GameBoard() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<Matter.Engine | null>(null)
   const renderRef = useRef<Matter.Render | null>(null)
+  const runnerRef = useRef<Matter.Runner | null>(null)
   const ballBodiesRef = useRef<Map<string, Matter.Body>>(new Map())
 
   const settings = useGameStore((state) => state.settings)
@@ -93,11 +94,18 @@ export default function GameBoard() {
     // Create pegs
     createPegs(engine, settings.rows)
 
+    // Create and start runner
+    const runner = Matter.Runner.create()
+    runnerRef.current = runner
+
     // Start engine and render
-    Matter.Engine.run(engine)
+    Matter.Runner.run(runner, engine)
     Matter.Render.run(render)
 
     return () => {
+      if (runnerRef.current) {
+        Matter.Runner.stop(runnerRef.current)
+      }
       Matter.Render.stop(render)
       Matter.World.clear(engine.world, false)
       Matter.Engine.clear(engine)
