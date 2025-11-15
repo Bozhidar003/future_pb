@@ -337,7 +337,7 @@ export default function GameBoard() {
     <div className="flex flex-col items-center gap-4 w-full max-w-4xl">
       {/* Canvas */}
       <div className="relative rounded-lg overflow-hidden shadow-2xl border-2 border-gray-800">
-        <canvas ref={canvasRef} />
+        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} />
 
         {/* Multiplier Slots Overlay */}
         <div className="absolute bottom-0 left-0 right-0 h-16 flex">
