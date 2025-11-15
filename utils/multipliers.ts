@@ -18,6 +18,7 @@ export function getMultipliers(rows: number, risk: RiskLevel): number[] {
 
 /**
  * Low risk: Flatter distribution (0.5x - 10x)
+ * Center slots have lower multipliers, edges have higher
  */
 function generateLowRiskMultipliers(numSlots: number): number[] {
   const multipliers: number[] = []
@@ -27,14 +28,14 @@ function generateLowRiskMultipliers(numSlots: number): number[] {
     const distance = Math.abs(i - mid)
     const normalized = distance / mid
 
-    // Center slots have higher multipliers
-    if (normalized < 0.2) {
+    // Edge slots have higher multipliers (rare outcomes)
+    if (normalized > 0.8) {
       multipliers.push(10)
-    } else if (normalized < 0.4) {
+    } else if (normalized > 0.6) {
       multipliers.push(5)
-    } else if (normalized < 0.6) {
+    } else if (normalized > 0.4) {
       multipliers.push(2)
-    } else if (normalized < 0.8) {
+    } else if (normalized > 0.2) {
       multipliers.push(1)
     } else {
       multipliers.push(0.5)
@@ -46,6 +47,7 @@ function generateLowRiskMultipliers(numSlots: number): number[] {
 
 /**
  * Medium risk: Moderate distribution (0.3x - 50x)
+ * Center slots have lower multipliers, edges have higher
  */
 function generateMediumRiskMultipliers(numSlots: number): number[] {
   const multipliers: number[] = []
@@ -55,15 +57,16 @@ function generateMediumRiskMultipliers(numSlots: number): number[] {
     const distance = Math.abs(i - mid)
     const normalized = distance / mid
 
-    if (normalized < 0.1) {
+    // Edge slots have higher multipliers (rare outcomes)
+    if (normalized > 0.9) {
       multipliers.push(50)
-    } else if (normalized < 0.3) {
+    } else if (normalized > 0.7) {
       multipliers.push(20)
-    } else if (normalized < 0.5) {
+    } else if (normalized > 0.5) {
       multipliers.push(5)
-    } else if (normalized < 0.7) {
+    } else if (normalized > 0.3) {
       multipliers.push(1)
-    } else if (normalized < 0.9) {
+    } else if (normalized > 0.1) {
       multipliers.push(0.5)
     } else {
       multipliers.push(0.3)
@@ -75,6 +78,7 @@ function generateMediumRiskMultipliers(numSlots: number): number[] {
 
 /**
  * High risk: Extreme distribution (0.2x - 1000x)
+ * Center slots have lowest multipliers, edges have extreme high values
  */
 function generateHighRiskMultipliers(numSlots: number): number[] {
   const multipliers: number[] = []
@@ -84,21 +88,21 @@ function generateHighRiskMultipliers(numSlots: number): number[] {
     const distance = Math.abs(i - mid)
     const normalized = distance / mid
 
-    // Extreme values at center and edges
-    if (i === mid) {
-      multipliers.push(1000)
-    } else if (normalized < 0.05) {
+    // Extreme values at edges, low values at center
+    if (i === 0 || i === numSlots - 1) {
+      multipliers.push(1000) // Far edges
+    } else if (normalized > 0.95) {
       multipliers.push(500)
-    } else if (normalized < 0.2) {
+    } else if (normalized > 0.8) {
       multipliers.push(100)
-    } else if (normalized < 0.4) {
+    } else if (normalized > 0.6) {
       multipliers.push(10)
-    } else if (normalized < 0.6) {
+    } else if (normalized > 0.4) {
       multipliers.push(2)
-    } else if (normalized < 0.8) {
+    } else if (normalized > 0.2) {
       multipliers.push(0.5)
     } else {
-      multipliers.push(0.2)
+      multipliers.push(0.2) // Center slots
     }
   }
 

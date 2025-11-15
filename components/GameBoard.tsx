@@ -263,27 +263,34 @@ export default function GameBoard() {
     // Play win/loss sound
     soundManager.playWinSound(slot.multiplier)
 
-    // Remove ball after a delay
+    // Remove ball and check if all balls have landed
+    setActiveBalls((prevBalls) => {
+      const updatedBalls = prevBalls.filter((b) => b.id !== ball.id)
+
+      // If this was the last ball, end game and handle auto-bet
+      if (updatedBalls.length === 0) {
+        setTimeout(() => {
+          endGame()
+
+          // Handle auto-bet - get current state
+          const currentAutoBetActive = useGameStore.getState().autoBetActive
+          if (currentAutoBetActive) {
+            handleAutoBet(result)
+          }
+        }, 100)
+      }
+
+      return updatedBalls
+    })
+
+    // Remove ball body from physics world after a delay
     setTimeout(() => {
       const body = ballBodiesRef.current.get(ball.id)
       if (body && engineRef.current) {
         Matter.Composite.remove(engineRef.current.world, body)
         ballBodiesRef.current.delete(ball.id)
-        setActiveBalls((prev) => prev.filter((b) => b.id !== ball.id))
       }
     }, 2000)
-
-    // Check if all balls have landed
-    setTimeout(() => {
-      if (activeBalls.length === 1) {
-        endGame()
-
-        // Handle auto-bet
-        if (autoBetActive) {
-          handleAutoBet(result)
-        }
-      }
-    }, 100)
   }
 
   // Handle auto-bet logic
@@ -319,7 +326,14 @@ export default function GameBoard() {
 
   // Handle bet button click
   const handleBet = () => {
-    if (isPlaying || balance < currentBet || currentBet < 0.1) return
+    if (isPlaying || balance < currentBet || currentBet < 0.1) {
+      // Stop auto-bet if insufficient balance
+      if (autoBetActive && balance < currentBet) {
+        setAutoBetActive(false)
+        setAutoBetCount(0)
+      }
+      return
+    }
 
     // Deduct bet amount
     updateBalance(-currentBet)
