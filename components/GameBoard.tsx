@@ -20,6 +20,7 @@ export default function GameBoard() {
   const renderRef = useRef<Matter.Render | null>(null)
   const runnerRef = useRef<Matter.Runner | null>(null)
   const ballBodiesRef = useRef<Map<string, Matter.Body>>(new Map())
+  const gameTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const settings = useGameStore((state) => state.settings)
   const balance = useGameStore((state) => state.balance)
@@ -38,6 +39,7 @@ export default function GameBoard() {
   const [activeBalls, setActiveBalls] = useState<Ball[]>([])
   const [autoBetCount, setAutoBetCount] = useState(0)
   const [highlightedSlot, setHighlightedSlot] = useState<number | null>(null)
+  const [allInMode, setAllInMode] = useState(false)
 
   // Update sound manager settings
   useEffect(() => {
@@ -267,8 +269,14 @@ export default function GameBoard() {
     setActiveBalls((prevBalls) => {
       const updatedBalls = prevBalls.filter((b) => b.id !== ball.id)
 
-      // If this was the last ball, end game and handle auto-bet
+      // If this was the last ball, end game and handle auto-bet/all-in
       if (updatedBalls.length === 0) {
+        // Clear the failsafe timeout
+        if (gameTimeoutRef.current) {
+          clearTimeout(gameTimeoutRef.current)
+          gameTimeoutRef.current = null
+        }
+
         setTimeout(() => {
           endGame()
 
@@ -276,6 +284,8 @@ export default function GameBoard() {
           const currentAutoBetActive = useGameStore.getState().autoBetActive
           if (currentAutoBetActive) {
             handleAutoBet(result)
+          } else if (allInMode) {
+            handleAllIn()
           }
         }, 100)
       }
@@ -291,6 +301,23 @@ export default function GameBoard() {
         ballBodiesRef.current.delete(ball.id)
       }
     }, 2000)
+  }
+
+  // Handle all-in mode
+  const handleAllIn = () => {
+    const currentBalance = useGameStore.getState().balance
+
+    // Stop if balance is too low
+    if (currentBalance < 0.1) {
+      setAllInMode(false)
+      return
+    }
+
+    // Continue betting entire balance
+    setTimeout(() => {
+      const balance = useGameStore.getState().balance
+      handleBet(Math.max(0.1, balance))
+    }, 500)
   }
 
   // Handle auto-bet logic
@@ -325,18 +352,26 @@ export default function GameBoard() {
   }
 
   // Handle bet button click
-  const handleBet = () => {
-    if (isPlaying || balance < currentBet || currentBet < 0.1) {
-      // Stop auto-bet if insufficient balance
-      if (autoBetActive && balance < currentBet) {
+  const handleBet = (betAmount?: number) => {
+    const amount = betAmount ?? currentBet
+
+    if (isPlaying || balance < amount || amount < 0.1) {
+      // Stop auto-bet or all-in if insufficient balance
+      if ((autoBetActive || allInMode) && balance < amount) {
         setAutoBetActive(false)
+        setAllInMode(false)
         setAutoBetCount(0)
       }
       return
     }
 
+    // Clear any existing game timeout
+    if (gameTimeoutRef.current) {
+      clearTimeout(gameTimeoutRef.current)
+    }
+
     // Deduct bet amount
-    updateBalance(-currentBet)
+    updateBalance(-amount)
 
     startGame()
 
@@ -346,6 +381,18 @@ export default function GameBoard() {
         dropBall()
       }, i * 200) // Stagger ball drops
     }
+
+    // Failsafe: Force end game after 30 seconds if balls haven't landed
+    gameTimeoutRef.current = setTimeout(() => {
+      console.warn('Game timeout reached, forcing endGame()')
+      endGame()
+      setActiveBalls([])
+
+      // Continue all-in if active
+      if (allInMode) {
+        handleAllIn()
+      }
+    }, 30000)
   }
 
   // Auto-bet effect
@@ -385,29 +432,57 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* Bet Button */}
-      <button
-        onClick={handleBet}
-        disabled={isPlaying || balance < currentBet || currentBet < 0.1 || autoBetActive}
-        className={`w-full max-w-md py-4 px-8 rounded-lg font-bold text-xl transition-all transform ${
-          isPlaying || balance < currentBet || currentBet < 0.1 || autoBetActive
-            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700 hover:scale-105 text-white shadow-lg'
-        }`}
-        aria-label="Place bet"
-      >
-        {isPlaying ? (
-          <span className="flex items-center justify-center gap-2">
-            <span className="animate-spin">⚪</span> Playing...
-          </span>
-        ) : balance < currentBet ? (
-          'Insufficient Balance'
-        ) : autoBetActive ? (
-          `Auto-Bet Running (${autoBetCount}/${autoBetConfig.numberOfBets === 'infinite' ? '∞' : autoBetConfig.numberOfBets})`
-        ) : (
-          `Bet $${currentBet.toFixed(2)}`
-        )}
-      </button>
+      {/* Bet Buttons */}
+      <div className="w-full max-w-md space-y-3">
+        <button
+          onClick={() => handleBet()}
+          disabled={isPlaying || balance < currentBet || currentBet < 0.1 || autoBetActive || allInMode}
+          className={`w-full py-4 px-8 rounded-lg font-bold text-xl transition-all transform ${
+            isPlaying || balance < currentBet || currentBet < 0.1 || autoBetActive || allInMode
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              : 'bg-green-600 hover:bg-green-700 hover:scale-105 text-white shadow-lg'
+          }`}
+          aria-label="Place bet"
+        >
+          {isPlaying ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="animate-spin">⚪</span> Playing...
+            </span>
+          ) : balance < currentBet ? (
+            'Insufficient Balance'
+          ) : autoBetActive ? (
+            `Auto-Bet Running (${autoBetCount}/${autoBetConfig.numberOfBets === 'infinite' ? '∞' : autoBetConfig.numberOfBets})`
+          ) : allInMode ? (
+            'All-In Mode Active'
+          ) : (
+            `Bet $${currentBet.toFixed(2)}`
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            if (allInMode) {
+              setAllInMode(false)
+            } else {
+              setAllInMode(true)
+              setAutoBetActive(false)
+              const balance = useGameStore.getState().balance
+              handleBet(Math.max(0.1, balance))
+            }
+          }}
+          disabled={isPlaying && !allInMode || autoBetActive || balance < 0.1}
+          className={`w-full py-3 px-6 rounded-lg font-bold text-lg transition-all transform ${
+            allInMode
+              ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg'
+              : isPlaying && !allInMode || autoBetActive || balance < 0.1
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              : 'bg-orange-600 hover:bg-orange-700 hover:scale-105 text-white shadow-lg'
+          }`}
+          aria-label="All-in bet"
+        >
+          {allInMode ? '🛑 Stop All-In' : '💰 All-In (Bet Until Bankrupt)'}
+        </button>
+      </div>
 
       {/* Active Balls Counter */}
       {activeBalls.length > 0 && (
