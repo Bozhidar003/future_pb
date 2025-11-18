@@ -8,7 +8,9 @@ class SoundManager {
   private enabled = true
   private volume = 0.5
 
-  constructor() {
+  private initAudioContext() {
+    if (this.audioContext) return
+
     if (typeof window !== 'undefined') {
       try {
         this.audioContext = new AudioContext()
@@ -26,8 +28,23 @@ class SoundManager {
     this.volume = Math.max(0, Math.min(1, volume / 100))
   }
 
-  private playTone(frequency: number, duration: number, type: OscillatorType = 'sine') {
-    if (!this.enabled || !this.audioContext) return
+  private async playTone(frequency: number, duration: number, type: OscillatorType = 'sine') {
+    if (!this.enabled) return
+
+    // Initialize audio context on first use (after user interaction)
+    this.initAudioContext()
+
+    if (!this.audioContext) return
+
+    // Resume audio context if it's suspended (browser policy)
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume()
+      } catch (e) {
+        console.warn('Failed to resume AudioContext:', e)
+        return
+      }
+    }
 
     const oscillator = this.audioContext.createOscillator()
     const gainNode = this.audioContext.createGain()
